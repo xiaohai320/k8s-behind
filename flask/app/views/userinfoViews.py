@@ -27,7 +27,6 @@ def login():
     # token = encode_auth_token(userinfo.to_dict(), current_app.config['SECRET_KEY'])
     # 存储新的登录状态
 
-    print(f"Remote Address: {request.remote_addr}")  # 调试输出
     if userinfo == "forbidden":
         return R.error().set_message('此账户已被封禁，请联系管理员').to_json()
     if userinfo:
@@ -70,13 +69,12 @@ def select_by_id():
     try:
         # 解析 JSON 请求体中的 user_id 参数
         data = request.get_json()
-        # print(data)
         user_id = data.get('id')
         if not user_id:
             return R.error().set_message('Missing user_id parameter').set_code(1000).to_json()
         # 调用 get_user_by_id 函数获取用户信息
         user_data = get_user_by_id(user_id)
-        # print(user_data)
+
         if user_data:
             return R.ok().set_message('User retrieved successfully').set_data({"items": user_data}).to_json()
         else:
@@ -175,7 +173,6 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 @token_required
 def upload_avatar():
     try:
-        print("files:",request.files)
         if 'image' not in request.files:
             return R.error().set_message('No file part').to_json()
         file = request.files['image']
@@ -191,7 +188,6 @@ def upload_avatar():
             file.save(filepath)
             # 构建访问 URL
             avatar_url = f"http://localhost:5000/static/img/{unique_name}"
-            print(avatar_url)
             # 更新用户信息中的头像字段
             # user_id = g.current_user['user_id']
             # update_user(user_id, avatar=avatar_url)

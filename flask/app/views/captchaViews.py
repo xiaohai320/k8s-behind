@@ -35,7 +35,7 @@ def get_captcha():
     return response
 @captcha_bp.route('/verify-captcha', methods=['POST'])
 def verify_captcha(user_input,key):
-    print(key)
+
     redis_client = get_redis_client()
     stored_captcha = redis_client.get(key)
     if stored_captcha and stored_captcha.decode().lower() == user_input.lower():
