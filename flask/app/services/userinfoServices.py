@@ -1,4 +1,6 @@
 from flask import current_app
+from sqlalchemy import false
+from sqlalchemy.exc import NoResultFound
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from app.models.userinfoModel import UserInfo
@@ -14,12 +16,13 @@ def create_user( account, password):
             # name=name,
             account=account,
             password_hash=generate_password_hash(password),
-            # roles=roles,
+            avatar="http://localhost:5000/static/img/defalutavatar.png",
+            roles="normal",
             # phone=phone
         )
         db.session.add(new_user)
         db.session.commit()
-        return new_user.to_dict()
+        return new_user.to_dict(),None
     except Exception as e:
         current_app.logger.error(f"Error during user verification: {e}")
         return None,f"Error during user verification: {e}"
@@ -107,6 +110,25 @@ def verify_user(account, password):
         current_app.logger.error(f"Error during user verification: {e}")
         return None
 
+def update_isEnable_status(user_id, is_enable):
+    try:
+        # 查询用户是否存在
+        # user = db.query(UserInfo).filter(UserInfo.id == user_id).one()
+        user = UserInfo.query.get(user_id)
+        if not user:
+            return False
+        user.is_enable = is_enable
+        db.session.commit()
+        return True  # 操作成功
+    except NoResultFound:
+        # 如果没有找到用户，记录错误日志并返回 False
+        current_app.logger.error(f"User with id {user_id} not found.")
+        return False
+    except Exception as e:
+        # 其他异常处理，比如数据库错误等
+        db.session.rollback()
+        current_app.logger.error(f"Error updating user status: {e}")
+        return False
 def check_old_pass(user_id, old_password):
     try:
         # 获取用户信息

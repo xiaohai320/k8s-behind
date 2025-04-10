@@ -19,7 +19,7 @@ def store_login_status(user_id, session_id, ip_address):
     redis_client = get_redis_client()
     key = f"user_session:{user_id}"
     value = {'session_id': session_id, 'ip_address': ip_address}
-    redis_client.setex(key,2880, json.dumps(value))
+    redis_client.setex(key,7200, json.dumps(value))
 
 def check_login_status(user_id, session_id):
     redis_client = get_redis_client()
@@ -27,7 +27,7 @@ def check_login_status(user_id, session_id):
     stored_data = redis_client.get(key)
     if stored_data:
         stored_data = json.loads(stored_data)
-        print("stored_data",stored_data)
+        # print("stored_data",stored_data)
         return stored_data.get('session_id') == session_id
     return False
 def remove_login_status(user_id):

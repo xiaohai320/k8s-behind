@@ -8,8 +8,11 @@ class R:
 
     @staticmethod
     def error(message="失败", data=None):
-        return R(False, 0, message, data)
+        return R(False, 400, message, data)
 
+    @staticmethod
+    def info(message="提示", data=None):
+        return R(False, 222, message, data)
     def __init__(self, success=True, code=200, message="成功", data=None):
         self.success = success
         self.code = code

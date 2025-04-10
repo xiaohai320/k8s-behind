@@ -1,4 +1,5 @@
 import uuid
+from zoneinfo import ZoneInfo
 
 from flask import Flask, request, jsonify, g, current_app
 import jwt
@@ -13,12 +14,14 @@ from app.extensions import check_login_status
 def encode_auth_token(user_info, secret_key, device_id=None):
     try:
         payload = {
-            'exp': datetime.utcnow() + timedelta(hours=6),
-            'iat': datetime.utcnow(),
+            'exp': datetime.now(ZoneInfo('Asia/Shanghai')) + timedelta(hours=6),
+            'iat': datetime.now(ZoneInfo('Asia/Shanghai')),
             'user_account': user_info['account'],  # 使用 account 作为 sub
+            'user_name':user_info['name'],
             'user_id': user_info['id'],   # 添加 user_id 到 payload
             'user_roles': user_info['roles'],  # 添加 user_roles 到 payload
             'session_id': str(uuid.uuid4())   # 唯一会话ID
+
         }
         return jwt.encode(payload, secret_key, algorithm='HS256')
     except Exception as e:
@@ -37,10 +40,10 @@ def decode_auth_token(auth_token):
         extracted_payload = {
             'user_account': payload.get('user_account'),
             'user_id': payload.get('user_id'),
+            'user_name': payload.get('user_name'),
             'user_roles': payload.get('user_roles'),
             'session_id': payload.get('session_id')
         }
-
         # 日志记录成功解码
         current_app.logger.info("Token decoded successfully.")
         return extracted_payload  # 返回用户 ID 或其他标识符

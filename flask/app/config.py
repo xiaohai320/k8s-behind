@@ -18,3 +18,6 @@ class Config:
     REDIS_PORT = 6379
     REDIS_DB = 0
     REDIS_PASSWORD = None  # 如果有密码，请设置
+    PROCESSED_ALERTS_FILE = 'flask/app/file/processed_alerts.txt'
+    ALERT_FILE = 'flask/app/file/alerts.txt'
+    ALERTMANAGER_URL = "http://192.168.249.128:31072/api/v2"

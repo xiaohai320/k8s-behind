@@ -8,25 +8,19 @@ from ..commonutils.R import R
 from ..extensions import store_login_status, remove_login_status
 from ..models.userinfoModel import UserInfo
 import jwt
-from ..services.userinfoServices import verify_user, get_all_users, create_user, delete_user, update_user, \
-    get_user_by_id, get_passhash_by_id
+from ..services.userinfoServices import *
 from ..utils.auth import token_required, ResponseCode, encode_auth_token, decode_auth_token
-
+from ..utils.operation_record import operation_record, log_operation
 user_bp = Blueprint('userinfo', __name__)
 @user_bp.route('/login', methods=['POST'])
 def login():
     logindata = request.get_json()
-
     # 检查必要的字段是否存在
     if not logindata or 'account' not in logindata or 'password' not in logindata or 'captcha' not in logindata or 'captchaKey' not in logindata:
-        return jsonify({'error': 'Missing required fields'}), 400
+        return R.error().set_message('Missing required fields').to_json()
     if not verify_captcha(logindata.get('captcha'), logindata.get('captchaKey')):
         return R.error().set_message('Invalid Captcha or CaptchaKey').to_json()
     userinfo = verify_user(logindata.get('account'), logindata.get('password'))
-    # # 生成新的JWT
-    # token = encode_auth_token(userinfo.to_dict(), current_app.config['SECRET_KEY'])
-    # 存储新的登录状态
-
     if userinfo == "forbidden":
         return R.error().set_message('此账户已被封禁，请联系管理员').to_json()
     if userinfo:
@@ -34,6 +28,7 @@ def login():
         store_login_status(userinfo.to_dict()['id'],
                            jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])['session_id'],
                            request.remote_addr)
+        log_operation(logindata.get('account'), "登录", {"data":{"ip":request.remote_addr}})
         return R.ok().set_message('Login successful').set_data({'token': token}).to_json()
     else:
         return R.error().set_message('Invalid username or password').set_code(ResponseCode.UNAUTHORIZED).to_json()
@@ -82,13 +77,13 @@ def select_by_id():
     except Exception as e:
         current_app.logger.error(f"Error in selectById endpoint: {e}")
         return R.error().set_message(f"Error in selectById endpoint: {e}").to_json()
-@user_bp.route('/user/pageQueryMember', methods=['GET'])
+@user_bp.route('/user/pageQueryMember/<int:page>/<int:per_page>', methods=['GET'])
 @token_required
-def get_users():
+def get_users(page, per_page):
     try:
         # 获取分页参数，默认值为第一页，每页 10 条记录
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
+        # page = int(request.args.get('page', 1))
+        # per_page = int(request.args.get('per_page', 10))
         # 获取查询参数
         name = request.args.get('name')
         account = request.args.get('account')
@@ -117,11 +112,30 @@ def get_users():
             'has_next': pagination.has_next,
             'has_prev': pagination.has_prev
         }
-        return R.ok().set_message('Users retrieved successfully').set_data({"items": response_data}).to_json()
+        return R.ok().set_message('Users retrieved successfully').set_data(response_data).to_json()
     except Exception as e:
         current_app.logger.error(f"Error retrieving users: {e}")
         return R.error().set_message(f'An error occurred while retrieving users:{e}').to_json()
 
+@user_bp.route('/user/enableOrDisableMember/<int:user_id>', methods=['POST'])
+@token_required
+def enable_or_disable_member(user_id):
+    try:
+        # 解析 JSON 请求体中的 isEnable 参数
+        data = request.get_json()
+        is_enable = data.get('isEnable')
+        if is_enable is None:
+            return R.error().set_message('Missing isEnable parameter').set_code(1000).to_json()
+        # 调用 update_user_status 函数更新用户状态
+        result = update_isEnable_status(user_id, is_enable)
+        if result:
+            # action = 'enabled' if is_enable else 'disabled'
+            return R.ok().to_json()
+        else:
+            return R.error().set_message('Failed to update user status').to_json()
+    except Exception as e:
+        current_app.logger.error(f"Error in enableOrDisableMember endpoint: {e}")
+        return R.error().set_message(f"Error in enableOrDisableMember endpoint: {e}").to_json()
 @user_bp.route('/user/update', methods=['PUT'])
 @token_required
 def update_user_route():
@@ -244,6 +258,7 @@ def logout():
         remove_login_status(user_id)
         # 打印调试信息
         current_app.logger.info(f"User {user_id} logged out successfully.")
+        log_operation(user_info['user_account'], "下线",None)
         return R.ok().set_message('Logout successful').to_json()
     except Exception as e:
         current_app.logger.error(f"Error during logout: {str(e)}")
