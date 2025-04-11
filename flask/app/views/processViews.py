@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from ..services.processMonitorService import *  # 假设服务函数在 processMonitorService 中
 from app import db
+from ..commonutils.R import R  # 确保 R 类已导入
 
 process_monitor_bp = Blueprint('process_monitor_bp', __name__)
 
@@ -45,50 +46,38 @@ def get_log_monitor():
             'has_prev': pagination.has_prev
         }
 
-        return jsonify({
-            "status": "success",
-            "message": "Logs retrieved successfully",
-            "data": response_data
-        }), 200
+        return R.ok().set_message('Logs retrieved successfully').set_data(response_data).to_json()
 
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"An error occurred while retrieving logs: {e}"
-        }), 500
-
+        return R.error().set_message(f"An error occurred while retrieving logs: {e}").to_json()
 
 @process_monitor_bp.route('/api/log-monitor/<entry_id>', methods=['GET'])
 def get_entry_by_id_route(entry_id):
     entry = get_entry_by_id(entry_id)
     if not entry:
-        return jsonify({"status": "error", "message": "Entry not found"}), 404
-    return jsonify({"status": "success", "data": entry}), 200
-
+        return R.error().set_message("Entry not found").to_json()
+    return R.ok().set_message('Entry retrieved successfully').set_data(entry).to_json()
 
 @process_monitor_bp.route('/api/log-monitor', methods=['POST'])
 def create_entry_route():
     data = request.json
     new_entry = create_entry(data)
-    return jsonify({"status": "success", "data": new_entry}), 201
-
+    return R.ok().set_message('Entry created successfully').set_data(new_entry).to_json()
 
 @process_monitor_bp.route('/api/log-monitor/<entry_id>', methods=['PUT'])
 def update_entry_route(entry_id):
     data = request.json
     updated_entry = update_entry(entry_id, data)
     if not updated_entry:
-        return jsonify({"status": "error", "message": "Entry not found"}), 404
-    return jsonify({"status": "success", "data": updated_entry}), 200
-
+        return R.error().set_message("Entry not found").to_json()
+    return R.ok().set_message('Entry updated successfully').set_data(updated_entry).to_json()
 
 @process_monitor_bp.route('/api/log-monitor/<entry_id>', methods=['DELETE'])
 def delete_entry_route(entry_id):
     success = delete_entry(entry_id)
     if not success:
-        return jsonify({"status": "error", "message": "Entry not found"}), 404
-    return jsonify({"status": "success", "message": "Entry deleted successfully"}), 200
-
+        return R.error().set_message("Entry not found").to_json()
+    return R.ok().set_message('Entry deleted successfully').to_json()
 
 @process_monitor_bp.route('/api/log-monitor/<entry_id>/suspend', methods=['POST'])
 def suspend_entry_route(entry_id):
@@ -96,5 +85,5 @@ def suspend_entry_route(entry_id):
     suspend_until = datetime.now() + timedelta(seconds=suspend_duration)
     suspended_entry = suspend_entry(entry_id, suspend_until)
     if not suspended_entry:
-        return jsonify({"status": "error", "message": "Entry not found"}), 404
-    return jsonify({"status": "success", "data": suspended_entry}), 200
+        return R.error().set_message("Entry not found").to_json()
+    return R.ok().set_message('Entry suspended successfully').set_data(suspended_entry).to_json()
