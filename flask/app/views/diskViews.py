@@ -3,6 +3,8 @@ from ..services.diskMonitorService import *
 from ..commonutils.R import R  # 确保 R 类已导入
 from ..utils.auth import token_required
 from ..utils.check_permission import permission_required
+from ..utils.operation_record import operation_record
+
 disk_monitor_bp = Blueprint('disk_monitor_bp', __name__)
 
 # 接收磁盘监控数据
@@ -11,7 +13,6 @@ def receive_disk_data():
     data = request.json
     if not data:
         return R.error().set_message("No data provided").to_json()
-
     save_disk_data(data)
     return R.ok().set_message("Data saved successfully").to_json()
 
@@ -30,15 +31,15 @@ def query_disk_data():
     }).to_json()
 # 修改磁盘监控告警阈值
 @disk_monitor_bp.route('/api/disk-monitor', methods=['PUT'])
+@token_required
+@operation_record(description='修改磁盘监控告警阈值')
 def update_alert_threshold():
     data = request.json
     if not data or 'hostname' not in data or 'disk_path' not in data or 'alert_threshold' not in data:
         return jsonify({"message": "Invalid data provided"}), 400
-
     hostname = data['hostname']
     disk_path = data['disk_path']
     alert_threshold = data['alert_threshold']
-
     # 调用服务方法更新告警阈值
     success = update_disk_alert_threshold(hostname, disk_path, alert_threshold)
     if success:

@@ -291,33 +291,6 @@ def delete_alert(fingerprint):
     else:
         print(f"无此指纹对应告警: {fingerprint}")
 
-# def update_configmap(data):
-#     """更新 ConfigMap 的辅助函数"""
-#     try:
-#         namespace = data.get('namespace', 'monitor-sa')
-#         configmap_name = data.get('configmap_name', 'prometheus-kubeconfig')
-#         new_rule = data.get('new_rule')
-#
-#         if not all([namespace, configmap_name, new_rule]):
-#             return R.error().set_message("Missing required parameters").to_json(), 400
-#
-#         cm = core_v1.read_namespaced_config_map(name=configmap_name, namespace=namespace)
-#         rules_dict = yaml.safe_load(cm.data['rules.yml'])
-#
-#         # 更新或添加新的告警规则
-#         for group in rules_dict.get('groups', []):
-#             group['rules'].append(new_rule)
-#
-#         updated_rules = yaml.dump(rules_dict, allow_unicode=True)
-#         cm.data['rules.yml'] = updated_rules
-#         core_v1.patch_namespaced_config_map(name=configmap_name, namespace=namespace, body=cm)
-#
-#         reload_prometheus()  # 如果有这个功能的话
-#         return R.ok().set_message("Alert rule added successfully").to_json()
-#     except Exception as e:
-#         print(f"Unexpected error: {e}")
-#         return R.error().set_message(str(e)).to_json(), 500
-
 def delete_alert_rule(alert_name, namespace='monitor-sa', configmap_name='prometheus-kubeconfig'):
     """删除指定名称的告警规则"""
     try:

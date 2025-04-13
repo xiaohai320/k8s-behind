@@ -35,7 +35,7 @@ class ScriptLog(db.Model):
     host_info = Column(db.String(255), nullable=False)
     executor_role = Column(db.String(255), nullable=False)
     status = Column(db.String(255), nullable=False)
-    result = Column(db.String(255), nullable=False)
+    result = Column(Text, nullable=False)
     executor_at = Column(DateTime, default=datetime.now(ZoneInfo('Asia/Shanghai')), nullable=False)
 
     def to_dict(self):

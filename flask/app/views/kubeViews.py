@@ -51,8 +51,8 @@ def get_alert_info():
     except Exception as e:
         return R.error().set_message(str(e)).to_json()
 
-# @alert_bp.route('/postalertinfo', methods=['POST'])
-# @token_required  # 如果需要认证，则添加此装饰器
+@alert_bp.route('/postalertinfo', methods=['POST'])
+
 def post_alert_info():
     try:
         data = request.json
@@ -70,24 +70,7 @@ def post_alert_info():
         return R.ok().set_message('Alert received and saved').to_json()
     except Exception as e:
         return R.error().set_message(str(e)).to_json()
-# @alert_bp.route('/testloki', methods=['POST'])
-# # @token_required  # 如果需要认证，则添加此装饰器
-# def testloki():
-#     print('testloki')
-#     data = request.json
-#     alerts = data.get('alerts', [])
-#     for alert in alerts:
-#         status = alert.get('status', 'unknown')
-#         fingerprint = alert.get('fingerprint')
-#         print(status,fingerprint)
-#         print(alert['startsAt'])
-#         print(alert['endsAt'])
-#         print( alert['labels']['alertname'])
-#
-#         print(alert['labels'].get('severity', ''))
 
-    # print(data)
-    # return R.ok().set_message('Alert received and saved').to_json()
 @alert_bp.route('/getalertmanagerrule', methods=['GET'])
 @token_required  # 如果需要认证，则添加此装饰器
 def get_alertmanager_rule():
@@ -214,7 +197,6 @@ def list_controllers_view():
     except (ApiException, ValueError) as e:
         return R.error().set_message(str(e)).to_json()
 
-
 @deploy_bp.route('/deployments', methods=['POST'])
 @token_required  # 如果需要认证，则添加此装饰器
 def create_deployment():
@@ -255,7 +237,6 @@ def update_deployment(namespace, name):
         return R.ok().set_message("Deployment updated").set_data(response.to_dict()).to_json()
     except ApiException as e:
         return R.error().set_message(str(e)).to_json()
-
 
 @deploy_bp.route('/deployments/<string:namespace>/<string:name>', methods=['DELETE'])
 @token_required  # 如果需要认证，则添加此装饰器
@@ -302,6 +283,7 @@ def modify_alert_rules():
     return modify_alert_rule(namespace, configmap_name, alert_name, new_rule)
 @alert_bp.route('/batch-suspend', methods=['POST'])
 @token_required  # 如果需要认证，则添加此装饰器
+@operation_record(description='批量挂起告警')
 def suspend_alerts():
     data = request.get_json()
     ids = data.get('ids')

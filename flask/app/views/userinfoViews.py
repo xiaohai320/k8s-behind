@@ -1,15 +1,14 @@
 import os
 import uuid
-from flask import Blueprint, request, jsonify, current_app, g
-from werkzeug.security import check_password_hash, generate_password_hash
+from flask import Blueprint, request, jsonify, g
+
 from werkzeug.utils import secure_filename
 from .captchaViews import verify_captcha
-from ..commonutils.R import R
 from ..extensions import store_login_status, remove_login_status
-from ..models.userinfoModel import UserInfo
 import jwt
 from ..services.userinfoServices import *
 from ..utils.auth import token_required, ResponseCode, encode_auth_token, decode_auth_token
+from ..utils.check_permission import permission_required
 from ..utils.operation_record import operation_record, log_operation
 user_bp = Blueprint('userinfo', __name__)
 @user_bp.route('/login', methods=['POST'])
@@ -86,20 +85,21 @@ def get_users(page, per_page):
         # per_page = int(request.args.get('per_page', 10))
         # 获取查询参数
         name = request.args.get('name')
-        account = request.args.get('account')
         role = request.args.get('role')
         is_enable = request.args.get('is_enable')
+        phone = request.args.get('phone')
         # 构建查询对象
         query = UserInfo.query
         # 动态添加查询条件
         if name:
-            query = query.filter(UserInfo.name.ilike(f'%{name}%'))
-        if account:
-            query = query.filter(UserInfo.account.ilike(f'%{account}%'))
+            query = query.filter((UserInfo.name.ilike(f'%{name}%')) | (UserInfo.account.ilike(f'%{name}%')))
+
         if role:
             query = query.filter(UserInfo.roles.ilike(f'%{role}%'))
         if is_enable:
             query = query.filter(UserInfo.is_enable.ilike(f'%{is_enable}%'))
+        if phone:
+            query = query.filter(UserInfo.phone.ilike(f'%{phone}%'))
         # 执行分页查询
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         # 构建响应数据
@@ -119,6 +119,8 @@ def get_users(page, per_page):
 
 @user_bp.route('/user/enableOrDisableMember/<int:user_id>', methods=['POST'])
 @token_required
+@operation_record(description='启用或禁用用户')
+@permission_required('admin')
 def enable_or_disable_member(user_id):
     try:
         # 解析 JSON 请求体中的 isEnable 参数
@@ -138,6 +140,7 @@ def enable_or_disable_member(user_id):
         return R.error().set_message(f"Error in enableOrDisableMember endpoint: {e}").to_json()
 @user_bp.route('/user/update', methods=['PUT'])
 @token_required
+
 def update_user_route():
     try:
         # 解析 JSON 请求体中的参数
@@ -168,19 +171,29 @@ def update_user_route():
     except Exception as e:
         current_app.logger.error(f"Error in update_user_route: {e}")
         return  R.error().set_message( 'An error occurred while updating the user').to_json()
-@user_bp.route('/user/delete/<int:user_id>', methods=['DELETE'])
+@user_bp.route('/user/delete', methods=['DELETE'])
 @token_required
-def delete_user_route(user_id):
+@permission_required('admin')
+@operation_record(description='删除用户')
+def delete_user_route():
     try:
+        # 获取请求中的用户ID列表
+        data = request.get_json()
+        user_ids = data.get('user_ids', [])
+        if not user_ids:
+            return R.error().set_message('No user IDs provided').to_json()
+
         # 调用 delete_user 函数删除用户
-        deleted = delete_user(user_id)
+        deleted = delete_user(user_ids)
         if deleted:
-            return R.ok().set_message('User deleted successfully').to_json()
+            return R.ok().set_message('Users deleted successfully').to_json()
         else:
-            return R.error().set_message('User not found or deletion failed').set_code(ResponseCode.NOT_FOUND).to_json()
+            return R.error().set_message('Users not found or deletion failed').to_json()
+
     except Exception as e:
         current_app.logger.error(f"Error in delete_user_route: {e}")
-        return R.error().set_message(f'An error occurred while deleting the user:{e}').to_json()
+        return R.error().set_message(f'An error occurred while deleting the users: {e}').to_json()
+
 UPLOAD_FOLDER = '../../static/img/'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 @user_bp.route('/uploadAvatar', methods=['POST'])
@@ -213,6 +226,7 @@ def upload_avatar():
         return R.error().set_message('An error occurred while uploading the avatar').to_json()
 @user_bp.route('/user/updatePassword', methods=['PUT'])
 @token_required
+@operation_record('updatePassword')
 def update_password_route():
     try:
         # 解析 JSON 请求体中的参数
@@ -220,6 +234,8 @@ def update_password_route():
         user_id = data.get('id')
         old_password = data.get('oldPass')
         new_password = data.get('newPass')
+        print("old"+old_password)
+        print("new"+new_password)
         if str(user_id) != str(g.current_user['user_id']) or g.current_user['user_roles'] == 'admin':
             return R.error().set_message('Invalid modify!').to_json()
         if not data  or 'oldPass' not in data  or 'newPass' not in data or 'captcha' not in data or 'captchaKey' not in data:
@@ -231,11 +247,11 @@ def update_password_route():
             return R.error().set_message('Invalid modify!').to_json()
         # 验证旧密码是否正确（假设有一个 get_user_by_id 函数）
         passhash = get_passhash_by_id(user_id)
+        # print("hash:"+passhash)
         if not passhash or not check_password_hash(passhash, old_password):
             return R.error().set_message('Incorrect old password').to_json()
         # 更新密码（假设有一个 update_user_password 函数）
         updated = update_user(user_id,None,None, new_password)
-
         if updated:
             return R.ok().set_message('Password updated successfully').to_json()
         else:
@@ -249,6 +265,7 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 @user_bp.route('/logout', methods=['POST'])
 @token_required
+@operation_record(description='用户登出')
 def logout():
     try:
         user_info = g.current_user
@@ -263,3 +280,85 @@ def logout():
     except Exception as e:
         current_app.logger.error(f"Error during logout: {str(e)}")
         return R.error().set_message(str(e)).set_code(ResponseCode.INTERNAL_ERROR).to_json()
+@user_bp.route('/batch-reset-password', methods=['POST'])
+@token_required
+@permission_required('admin')
+@operation_record(description='批量重置密码')
+def batch_reset_password():
+    data = request.get_json()
+    print(data)
+    if not data or 'user_ids' not in data or not isinstance(data['user_ids'], list):
+        return R.error().set_message("缺少必要参数或参数格式错误").set_code(ResponseCode.BAD_REQUEST).to_json()
+
+    user_ids = data['user_ids']
+    if not user_ids:
+        return R.error().set_message("未选择任何用户").set_code(ResponseCode.BAD_REQUEST).to_json()
+    if batch_reset_password_service(user_ids):
+        return R.ok().set_message("批量重置密码成功").to_json()
+    else:
+        return R.error().set_message("批量重置密码失败").to_json()
+@user_bp.route('/adduser', methods=['POST'])
+@token_required
+@permission_required('admin')
+@operation_record(description='添加用户')
+def adduser():
+    data = request.get_json()
+    if not data or not all(key in data for key in ['account', 'department', 'posts', 'roles', 'phone']):
+        return R.error().set_message("缺少必要参数").set_code(ResponseCode.BAD_REQUEST).to_json()
+
+    account = data['account']
+    department = data['department']
+    posts = data['posts']
+    roles = data['roles']
+    phone = data['phone']
+    is_enable = data.get('is_enable', True)  # 默认启用
+
+    # 检查账户是否已存在
+    existing_user = UserInfo.query.filter_by(account=account).first()
+    if existing_user:
+        return R.error().set_message("账户已存在").to_json()
+
+    # 创建新用户
+    new_user = UserInfo(
+        account=account,
+        password_hash=generate_password_hash("Admin@123"),  # 统一密码
+        department=department,
+        posts=posts,
+        roles=roles,
+        phone=phone,
+        is_enable=is_enable,
+        create_at=datetime.now(ZoneInfo('Asia/Shanghai')),
+        update_at=datetime.now(ZoneInfo('Asia/Shanghai'))
+    )
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+        return R.ok().set_message("用户添加成功").to_json()
+    except Exception as e:
+        db.session.rollback()
+        return R.error().set_message(f"用户添加失败: {str(e)}").to_json()
+@user_bp.route('/user/updateRole', methods=['PUT'])
+@token_required
+@operation_record(description='修改用户角色')
+@permission_required('admin')
+def update_user_role_route():
+    try:
+        # 解析 JSON 请求体中的参数
+        data = request.get_json()
+        user_id = data.get('id')
+        roles = data.get('roles')
+        if not user_id or roles is None:
+            return R.error().set_message('Missing user_id or roles parameter').set_code(ResponseCode.BAD_REQUEST).to_json()
+        # 检查是否有对 roles 的修改，并确保当前用户是管理员
+        if g.current_user['user_roles'] != 'admin':
+            return R.error().set_message('Only administrators can modify roles').to_json()
+        # 调用 update_user_role 函数更新用户角色
+        updated_user = update_user_role(user_id, roles)
+        if updated_user:
+            return R.ok().set_message('User role updated successfully').set_data({"items": updated_user}).to_json()
+        else:
+            return R.error().set_message('User not found or update failed').to_json()
+
+    except Exception as e:
+        current_app.logger.error(f"Error in update_user_role_route: {e}")
+        return R.error().set_message('An error occurred while updating the user role').to_json()

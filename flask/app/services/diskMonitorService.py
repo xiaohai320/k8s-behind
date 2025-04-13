@@ -54,7 +54,7 @@ def save_disk_data(data):
                 percent_used= f"{percent_used:.2f}",
                 alert_threshold=alert_threshold_gb,
                 # is_alert=is_alert,
-                # update_time=record['update_time']
+                # update_time=record['update_time']11
             )
             db.session.add(disk_record)
 

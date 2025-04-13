@@ -1,8 +1,12 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from flask import current_app
 from sqlalchemy import false
 from sqlalchemy.exc import NoResultFound
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
+from app.commonutils.R import R
 from app.models.userinfoModel import UserInfo
 
 # services = services
@@ -78,18 +82,23 @@ def update_user(user_id, name=None, account=None, password=None, roles=None, pho
         db.session.rollback()  # 发生异常时回滚事务
         current_app.logger.error(f"Error updating user with ID {user_id}: {e}")
         return None
-def delete_user(user_id):
+def delete_user(user_ids):
     try:
-        user = UserInfo.query.get(user_id)
-        if not user:
+        # 查询需要删除的用户
+        users = UserInfo.query.filter(UserInfo.id.in_(user_ids)).all()
+        if not users:
             return False
-        db.session.delete(user)
+
+        # 批量删除用户
+        for user in users:
+            db.session.delete(user)
+        
         db.session.commit()
         return True
 
     except Exception as e:
         db.session.rollback()  # 发生异常时回滚事务
-        current_app.logger.error(f"Error deleting user with ID {user_id}: {e}")
+        current_app.logger.error(f"Error deleting users with IDs {user_ids}: {e}")
         return False
 def verify_user(account, password):
     """验证用户凭据"""
@@ -152,3 +161,33 @@ def check_old_pass(user_id, old_password):
     except Exception as e:
         current_app.logger.error(f"Error checking old password for user ID {user_id}: {e}")
         return False
+def batch_reset_password_service(user_ids):
+    try:
+        # 查询需要重置密码的用户
+        users = UserInfo.query.filter(UserInfo.id.in_(user_ids)).all()
+        if not users:
+            return False
+
+        # 批量更新密码
+        for user in users:
+            user.password_hash = generate_password_hash("Admin@123")
+            user.update_at = datetime.now(ZoneInfo('Asia/Shanghai'))
+
+        db.session.commit()
+        return True
+    except Exception as e:
+        current_app.logger.error(f"Error reset  password for users ID {user_ids}: {e}")
+        db.session.rollback()
+        return False
+def update_user_role(user_id, roles):
+    try:
+        user = UserInfo.query.get(user_id)
+        if not user:
+            return None
+        user.roles = roles
+        db.session.commit()
+        return user.to_dict()
+    except Exception as e:
+        db.session.rollback()  # 发生异常时回滚事务
+        current_app.logger.error(f"Error updating user role with ID {user_id}: {e}")
+        return None

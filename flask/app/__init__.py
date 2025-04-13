@@ -37,6 +37,8 @@ def create_app():
     from .views.sshViews import ssh_bp
     from .views.processViews import process_monitor_bp
     from .views.diskViews import disk_monitor_bp
+    from .views.echartsViews import prometheus_bp
+    app.register_blueprint(prometheus_bp)
     app.register_blueprint(k8s_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(alert_bp)

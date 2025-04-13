@@ -7,22 +7,16 @@ from zoneinfo import ZoneInfo
 
 class LogMonitor(db.Model):
     __tablename__ = 'log_monitor'
-
-    id = Column(String(36), primary_key=True)  # 主键
-    hostname = Column(String(255), nullable=False)  # 主机名
-    process_name = Column(String(255), nullable=False)  # 进程名
+    id = db.Column(db.Integer, primary_key=True)
+    hostname = Column(String(255), nullable=True)  # 主机名
+    process_name = Column(String(255), nullable=True)  # 进程名
     update_at = Column(DateTime, default=datetime.now(ZoneInfo('Asia/Shanghai')), onupdate=datetime.now(ZoneInfo('Asia/Shanghai')))  # 更新时间
     create_at = Column(DateTime, default=datetime.now(ZoneInfo('Asia/Shanghai')))  # 创建时间
-    process_status = Column(String(50), nullable=False)  # 进程状态
-    monitor_start_time = Column(String(8), nullable=False)  # 监控开始时间
-    monitor_end_time = Column(String(8), nullable=False)  # 监控结束时间
-    run_log_keywords = Column(Text, nullable=False)  # 运行日志过滤关键字
-    error_log_keywords = Column(Text, nullable=False)  # 错误日志过滤关键字
-    log_path = Column(Text, nullable=False)  # 日志路径
-    ignore_alert_until = Column(DateTime, nullable=True)  # 忽略告警结束时间（挂起到期时间）
-    alert_log_params = Column(Text, nullable=True)  # 告警日志参数（错误日志中出现的关键词）
-    is_suspended = Column(Boolean, default=False)  # 是否挂起（0/1）
-    is_alerted = Column(Boolean, default=False)  # 是否告警（0/1）
+    process_status = Column(String(50), nullable=True)  # 进程状态
+    monitor_start_time = Column(String(8), nullable=True)  # 监控开始时间
+    monitor_end_time = Column(String(8), nullable=True)  # 监控结束时间
+    log_path = Column(Text, nullable=True)  # 日志路径
+    script_name= Column(String(255), nullable=True)
     def to_dict(self):
         return {
             "id": self.id,
@@ -33,11 +27,6 @@ class LogMonitor(db.Model):
             "process_status": self.process_status,
             "monitor_start_time": self.monitor_start_time,
             "monitor_end_time": self.monitor_end_time,
-            "run_log_keywords": self.run_log_keywords,
-            "error_log_keywords": self.error_log_keywords,
             "log_path": self.log_path,
-            "ignore_alert_until": self.ignore_alert_until.isoformat() if self.ignore_alert_until else None,
-            "alert_log_params": self.alert_log_params,
-            "is_suspended": self.is_suspended,
-            "is_alerted": self.is_alerted,
+            "script_name": self.script_name
         }

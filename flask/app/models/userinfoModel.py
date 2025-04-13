@@ -31,6 +31,7 @@ class UserInfo(db.Model):
             'account': self.account,
             'roles': self.roles,
             'phone': self.phone,
+            'password_hash':self.password_hash,
             'is_enable': self.is_enable,
             'posts':self.posts,
             'department':self.department,
