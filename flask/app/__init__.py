@@ -1,14 +1,13 @@
 import atexit
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-from .extensions import init_redis_pool
 from kubernetes import client, config as k8sconfig
+
 from .config import Config  # 使用相对导入路径
-from apscheduler.schedulers.background import BackgroundScheduler
-
-
+from .extensions import init_redis_pool
 
 db = SQLAlchemy()
 
