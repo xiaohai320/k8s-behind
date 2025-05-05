@@ -1,27 +1,28 @@
 import uuid
+from datetime import datetime, timedelta
+from functools import wraps
 from zoneinfo import ZoneInfo
 
-from flask import Flask, request, jsonify, g, current_app
 import jwt
-from functools import wraps
-from datetime import datetime, timedelta
-
+from flask import request, g, current_app
 from werkzeug.exceptions import Unauthorized
 
 from app.commonutils.R import R
 from app.commonutils.ResultCode import ResponseCode
-from app.extensions import check_login_status
+from app.extensions import check_login_status, check_jti_in_blacklist
+
+
 def encode_auth_token(user_info, secret_key, device_id=None):
     try:
         payload = {
             'exp': datetime.now(ZoneInfo('Asia/Shanghai')) + timedelta(hours=6),
             'iat': datetime.now(ZoneInfo('Asia/Shanghai')),
+            'jti': str(uuid.uuid4()),
             'user_account': user_info['account'],  # 使用 account 作为 sub
             'user_name':user_info['name'],
             'user_id': user_info['id'],   # 添加 user_id 到 payload
             'user_roles': user_info['roles'],  # 添加 user_roles 到 payload
             'session_id': str(uuid.uuid4())   # 唯一会话ID
-
         }
         return jwt.encode(payload, secret_key, algorithm='HS256')
     except Exception as e:
@@ -38,6 +39,8 @@ def decode_auth_token(auth_token):
         if 'user_account' not in payload or 'user_id' not in payload or 'session_id' not in payload:
             raise jwt.InvalidTokenError
         extracted_payload = {
+            'exp': payload.get('exp'),
+            'jti': payload.get('jti'),
             'user_account': payload.get('user_account'),
             'user_id': payload.get('user_id'),
             'user_name': payload.get('user_name'),
@@ -66,10 +69,15 @@ def token_required(f):
             return R.error().set_message('Token is missing!').set_code(ResponseCode.UNAUTHORIZED).to_json()
         try:
             user_info = decode_auth_token(token)
+            jti = user_info.get('jti')
+            if jti and check_jti_in_blacklist(jti):
+                return R.ok().set_code(ResponseCode.INVALID_CREDENTIALS).set_message(
+                    "Token 已被注销，请重新登录").to_json()
             user_id = user_info['user_id']
             session_id = user_info['session_id']
             # 检查当前会话是否是最新会话
             if not check_login_status(user_id, session_id):
+
                 return R.ok().set_message('You have been logged in from another device. Please log in again.').set_code(ResponseCode.OTHER_CLIENT_LOGGED_IN).to_json()
             g.current_user = user_info  # 将当前用户信息附加到全局变量g上
         except Exception as e:

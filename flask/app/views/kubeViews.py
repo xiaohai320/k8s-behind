@@ -1,11 +1,11 @@
 
 import requests
 from flask import Blueprint, request, abort
-
 from requests.exceptions import RequestException
 
 from ..services.kubeServices import *
 from ..utils.auth import token_required
+from ..utils.check_permission import permission_required
 from ..utils.operation_record import operation_record
 
 alert_bp = Blueprint('alert', __name__)
@@ -20,8 +20,6 @@ def get_alert_info():
         # 获取查询参数
         status = request.args.get('status')  # 可选：挂起/激活等状态
         severity = request.args.get('severity')  # 可选：Pod名称或其他标识符
-        # print(status,severity)
-        # 构建查询对象
         query = AlertsInfo.query
         # 根据查询参数构建过滤条件
         if status and status.strip():
@@ -37,12 +35,11 @@ def get_alert_info():
         if severity and severity.strip():
             query = query.filter(AlertsInfo.severity==severity)
         # 应用分页
+        query = query.order_by(AlertsInfo.updated_at.desc())
         paginated_alerts = query.paginate(page=page, per_page=page_size, error_out=False)
         # print(paginated_alerts.items)
         total = paginated_alerts.total
-
         alerts = [alert.to_dict() for alert in paginated_alerts.items]
-
         return R.ok().set_data({
             'total': total,
             'alerts': alerts,
@@ -84,12 +81,12 @@ def get_alertmanager_rule():
 @k8s_bp.route('/pods', methods=['GET'])
 @token_required  # 如果需要认证，则添加此装饰器
 def list_pods_info():
-    namespace = request.args.get('namespace', 'default')
+    podName = request.args.get('podName', '')
     page = int(request.args.get('page', 1))
     pageSize = int(request.args.get('pageSize', 10))
     try:
         # 调用服务层的函数来获取 Pod 列表和总数
-        pods_data = list_pods(namespace, page, pageSize)
+        pods_data = list_pods(podName if podName else None, page, pageSize)
         return R.ok().set_data(pods_data).to_json()
 
     except Exception as e:
@@ -103,8 +100,8 @@ def get_operations_view():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 @k8s_bp.route('/delete_pod', methods=['DELETE'])
-@operation_record(description='删除Pod')
 @token_required  # 如果需要认证，则添加此装饰器
+@operation_record(description='删除Pod')
 def delete_pod():
     namespace = request.args.get('namespace')
     pod_name = request.args.get('pod_name')
@@ -120,8 +117,8 @@ def delete_pod():
         return R.error().set_message(str(e)).to_json()
 
 @k8s_bp.route('/scale-pods', methods=['POST'])
-@operation_record(description='扩缩容Pod')
 @token_required  # 如果需要认证，则添加此装饰器
+@operation_record(description='扩缩容Pod')
 def scale_pods():
     data = request.json
     if not all(k in data for k in ('namespace','controller_name', 'replicas','type')):
@@ -155,15 +152,18 @@ def get_deployment(namespace, deployment_name):
 @k8s_bp.route('/nodes', methods=['GET'])
 @token_required  # 如果需要认证，则添加此装饰器
 def list_nodes_view():
-    name = request.args.get('name')
+    name = request.args.get('nodeName')
     try:
+
         nodes = list_nodes(name)
-        if isinstance(nodes, list):
-            return R.ok().set_data([node.to_dict() for node in nodes.items]).to_json()
+
+        if not nodes:
+            return R.error().set_message("No nodes found").to_json()
         else:
             return R.ok().set_data(nodes.to_dict()).to_json()
     except ApiException as e:
         return R.error().set_message(str(e)).to_json()
+
 
 @k8s_bp.route('/svc', methods=['GET'])
 # @token_required  # 如果需要认证，则添加此装饰器
@@ -284,6 +284,7 @@ def modify_alert_rules():
 @alert_bp.route('/batch-suspend', methods=['POST'])
 @token_required  # 如果需要认证，则添加此装饰器
 @operation_record(description='批量挂起告警')
+@permission_required('alert_suspend')
 def suspend_alerts():
     data = request.get_json()
     ids = data.get('ids')

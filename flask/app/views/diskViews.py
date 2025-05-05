@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
-from ..services.diskMonitorService import *
+
 from ..commonutils.R import R  # 确保 R 类已导入
+from ..services.diskMonitorService import *
 from ..utils.auth import token_required
 from ..utils.check_permission import permission_required
 from ..utils.operation_record import operation_record
@@ -19,7 +20,7 @@ def receive_disk_data():
 # 查询磁盘监控数据
 @disk_monitor_bp.route('/api/disk-monitor', methods=['GET'])
 @token_required
-@permission_required("admin")
+@permission_required('disk_monitor_query')
 def query_disk_data():
     hostname = request.args.get('hostname', '')
     page = int(request.args.get('page', 1))
@@ -33,6 +34,7 @@ def query_disk_data():
 @disk_monitor_bp.route('/api/disk-monitor', methods=['PUT'])
 @token_required
 @operation_record(description='修改磁盘监控告警阈值')
+@permission_required('disk_monitor_update')
 def update_alert_threshold():
     data = request.json
     if not data or 'hostname' not in data or 'disk_path' not in data or 'alert_threshold' not in data:

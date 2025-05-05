@@ -2,12 +2,12 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from flask import current_app
-from sqlalchemy import false
 from sqlalchemy.exc import NoResultFound
 from werkzeug.security import generate_password_hash, check_password_hash
+
 from app import db
-from app.commonutils.R import R
 from app.models.userinfoModel import UserInfo
+
 
 # services = services
 def create_user( account, password):
@@ -57,7 +57,9 @@ def get_all_users():
         return []
 def update_user(user_id, name=None, account=None, password=None, roles=None, phone=None,avatar=None,posts=None,department=None):
     try:
+        print(user_id)
         user = UserInfo.query.get(user_id)
+        print(user.to_dict())
         if not user:
             return None
         if name is not None:
@@ -76,6 +78,7 @@ def update_user(user_id, name=None, account=None, password=None, roles=None, pho
             user.posts = posts
         if department is not None:
             user.department = department
+
         db.session.commit()
         return user.to_dict()
     except Exception as e:
@@ -104,6 +107,7 @@ def verify_user(account, password):
     """验证用户凭据"""
     try:
         # 查询用户
+
         user = UserInfo.query.filter_by(account=account).first()
         # 验证用户和密码
         if user and user.check_password(password):

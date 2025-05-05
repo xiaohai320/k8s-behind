@@ -37,6 +37,9 @@ def create_app():
     from .views.processViews import process_monitor_bp
     from .views.diskViews import disk_monitor_bp
     from .views.echartsViews import prometheus_bp
+    from .views.roleViews import role_bp
+    from .views.operationViews import operation_bp
+    from .views.grafana import grafana_bp
     app.register_blueprint(prometheus_bp)
     app.register_blueprint(k8s_bp)
     app.register_blueprint(user_bp)
@@ -45,5 +48,8 @@ def create_app():
     app.register_blueprint(ssh_bp)
     app.register_blueprint(process_monitor_bp)
     app.register_blueprint(disk_monitor_bp)
+    app.register_blueprint(role_bp)
+    app.register_blueprint(operation_bp)
+    app.register_blueprint(grafana_bp)
     app.register_blueprint(captcha_bp, url_prefix='/captcha')  # 注册验证码蓝图，并指定前缀
     return app

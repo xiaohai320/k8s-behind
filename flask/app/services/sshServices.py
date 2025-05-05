@@ -1,19 +1,15 @@
-import os
 import re
 import tempfile
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from django.core.cache import cache
-from django.db.models.expressions import result
+from fabric import Connection
 from flask import g
 from sqlalchemy import or_
 
-from app.models.linuxUserHostModel import LinuxHost,LinuxUser
-from fabric import Connection
 from app import db
-from app.models.processMonitorModel import LogMonitor
-from app.models.scriptTaskModel import ScriptTask,ScriptLog
+from app.models.linuxUserHostModel import LinuxHost, LinuxUser
+from app.models.scriptTaskModel import ScriptTask, ScriptLog
 
 
 def list_all_hosts():
@@ -394,3 +390,11 @@ def cron_script(host_id, user_id, script_task_id, cron_cycle, working_directory)
             result=str(e)
         )
         raise e
+def get_host_by_ip(ip_address):
+    # 假设使用 SQLAlchemy 查询主机信息
+    return LinuxHost.query.filter_by(ip_address=ip_address).first()
+
+def get_root_user_by_host(host_id):
+    # 假设使用 SQLAlchemy 查询 root 用户信息
+    return LinuxUser.query.filter_by(host_id=host_id, username='root').first()
+

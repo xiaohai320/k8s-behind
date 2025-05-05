@@ -1,23 +1,30 @@
 import os
 import uuid
-from flask import Blueprint, request, jsonify, g
 
-from werkzeug.utils import secure_filename
-from .captchaViews import verify_captcha
-from ..extensions import store_login_status, remove_login_status
 import jwt
+from flask import Blueprint, request, jsonify, g
+from werkzeug.utils import secure_filename
+
+from .captchaViews import verify_captcha
+from ..commonutils.R import R
+from ..extensions import store_login_status, remove_login_status, add_jti_to_blacklist, get_client_ip
 from ..services.userinfoServices import *
-from ..utils.auth import token_required, ResponseCode, encode_auth_token, decode_auth_token
+from ..utils.auth import token_required, ResponseCode, encode_auth_token
 from ..utils.check_permission import permission_required
 from ..utils.operation_record import operation_record, log_operation
+
 user_bp = Blueprint('userinfo', __name__)
 @user_bp.route('/login', methods=['POST'])
 def login():
     logindata = request.get_json()
+    ip_address = get_client_ip()
+    captcha = logindata.get('captcha')
+    captcha_key = logindata.get('captchaKey')
     # 检查必要的字段是否存在
     if not logindata or 'account' not in logindata or 'password' not in logindata or 'captcha' not in logindata or 'captchaKey' not in logindata:
         return R.error().set_message('Missing required fields').to_json()
-    if not verify_captcha(logindata.get('captcha'), logindata.get('captchaKey')):
+    if not verify_captcha(captcha, captcha_key, ip_address=ip_address):
+
         return R.error().set_message('Invalid Captcha or CaptchaKey').to_json()
     userinfo = verify_user(logindata.get('account'), logindata.get('password'))
     if userinfo == "forbidden":
@@ -78,6 +85,7 @@ def select_by_id():
         return R.error().set_message(f"Error in selectById endpoint: {e}").to_json()
 @user_bp.route('/user/pageQueryMember/<int:page>/<int:per_page>', methods=['GET'])
 @token_required
+@permission_required("query_user")
 def get_users(page, per_page):
     try:
         # 获取分页参数，默认值为第一页，每页 10 条记录
@@ -116,11 +124,10 @@ def get_users(page, per_page):
     except Exception as e:
         current_app.logger.error(f"Error retrieving users: {e}")
         return R.error().set_message(f'An error occurred while retrieving users:{e}').to_json()
-
 @user_bp.route('/user/enableOrDisableMember/<int:user_id>', methods=['POST'])
 @token_required
 @operation_record(description='启用或禁用用户')
-@permission_required('admin')
+@permission_required('enable_disable_user')
 def enable_or_disable_member(user_id):
     try:
         # 解析 JSON 请求体中的 isEnable 参数
@@ -140,7 +147,8 @@ def enable_or_disable_member(user_id):
         return R.error().set_message(f"Error in enableOrDisableMember endpoint: {e}").to_json()
 @user_bp.route('/user/update', methods=['PUT'])
 @token_required
-
+@permission_required('update_user')
+@operation_record(description='更新用户信息')
 def update_user_route():
     try:
         # 解析 JSON 请求体中的参数
@@ -154,14 +162,9 @@ def update_user_route():
         avatar = data.get('avatar')
         posts=data.get('posts')
         department=data.get('department')
+        print(data)
         if not user_id:
             return R.error().set_message('Missing user_id parameter').set_code(ResponseCode.BAD_REQUEST).to_json()
-        # 检查是否有对 roles 的修改，并确保当前用户是管理员
-        sensitive_fields = [roles, account, posts, department]
-        if str(user_id) != str(g.current_user['user_id']) or g.current_user['user_roles'] == 'admin':
-            return R.error().set_message('Invalid modify!').to_json()
-        if any(field is not None for field in sensitive_fields) and g.current_user['user_roles'] != 'admin':
-            return R.error().set_message('Only administrators can modify sensitive fields').to_json()
         # 调用 update_user 函数更新用户信息
         updated_user = update_user(user_id, name, account, None, roles, phone,avatar,posts,department)
         if updated_user:
@@ -173,7 +176,7 @@ def update_user_route():
         return  R.error().set_message( 'An error occurred while updating the user').to_json()
 @user_bp.route('/user/delete', methods=['DELETE'])
 @token_required
-@permission_required('admin')
+@permission_required('delete_user')
 @operation_record(description='删除用户')
 def delete_user_route():
     try:
@@ -229,25 +232,25 @@ def upload_avatar():
 @operation_record('updatePassword')
 def update_password_route():
     try:
+        ip_address=get_client_ip()
         # 解析 JSON 请求体中的参数
         data = request.get_json()
         user_id = data.get('id')
         old_password = data.get('oldPass')
         new_password = data.get('newPass')
-        print("old"+old_password)
-        print("new"+new_password)
+
         if str(user_id) != str(g.current_user['user_id']) or g.current_user['user_roles'] == 'admin':
             return R.error().set_message('Invalid modify!').to_json()
         if not data  or 'oldPass' not in data  or 'newPass' not in data or 'captcha' not in data or 'captchaKey' not in data:
             return jsonify({'error': 'Missing required fields'}), 400
-        if not verify_captcha(data.get('captcha'), data.get('captchaKey')):
+        if not verify_captcha(data.get('captcha'), data.get('captchaKey'),ip_address=ip_address):
             return R.error().set_message('Invalid Captcha or CaptchaKey').to_json()
         # 检查用户是否为当前登录用户
         if str(user_id) != str(g.current_user['user_id']):
             return R.error().set_message('Invalid modify!').to_json()
         # 验证旧密码是否正确（假设有一个 get_user_by_id 函数）
         passhash = get_passhash_by_id(user_id)
-        # print("hash:"+passhash)
+
         if not passhash or not check_password_hash(passhash, old_password):
             return R.error().set_message('Incorrect old password').to_json()
         # 更新密码（假设有一个 update_user_password 函数）
@@ -271,10 +274,21 @@ def logout():
         user_info = g.current_user
         user_id = user_info['user_id']
         session_id = user_info['session_id']
-        # 移除 Redis 中的会话信息
+        user_info = g.current_user
+        user_id = user_info['user_id']
+        session_id = user_info['session_id']
+        jti = user_info.get('jti')
+        if not jti:
+            return R.error().set_message("Invalid token: missing jti").to_json()
+        # 获取 token 的过期时间
+        exp_timestamp = user_info.get('exp')  # 这个字段必须是从 decode_auth_token 返回的 payload 中带出来的
+        if not exp_timestamp:
+            return R.error().set_message("Invalid token: missing exp").to_json()
+        # 将 jti 加入黑名单
+        add_jti_to_blacklist(jti, exp_timestamp)
+        # 移除登录状态
         remove_login_status(user_id)
         # 打印调试信息
-        current_app.logger.info(f"User {user_id} logged out successfully.")
         log_operation(user_info['user_account'], "下线",None)
         return R.ok().set_message('Logout successful').to_json()
     except Exception as e:
@@ -282,7 +296,7 @@ def logout():
         return R.error().set_message(str(e)).set_code(ResponseCode.INTERNAL_ERROR).to_json()
 @user_bp.route('/batch-reset-password', methods=['POST'])
 @token_required
-@permission_required('admin')
+@permission_required('batch_reset_pass')
 @operation_record(description='批量重置密码')
 def batch_reset_password():
     data = request.get_json()
@@ -299,7 +313,7 @@ def batch_reset_password():
         return R.error().set_message("批量重置密码失败").to_json()
 @user_bp.route('/adduser', methods=['POST'])
 @token_required
-@permission_required('admin')
+@permission_required('add_user')
 @operation_record(description='添加用户')
 def adduser():
     data = request.get_json()
@@ -340,7 +354,7 @@ def adduser():
 @user_bp.route('/user/updateRole', methods=['PUT'])
 @token_required
 @operation_record(description='修改用户角色')
-@permission_required('admin')
+@permission_required('update_role')
 def update_user_role_route():
     try:
         # 解析 JSON 请求体中的参数

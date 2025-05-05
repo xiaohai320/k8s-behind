@@ -7,6 +7,7 @@ from flask import request, current_app, g
 from .. import db
 from ..models.useroperationlog import UserOperationLog
 
+
 def operation_record(description=None):
     def decorator(f):
         @wraps(f)
@@ -29,7 +30,7 @@ def operation_record(description=None):
                         'query_string': request.query_string.decode(),
                         'data': request.get_json(silent=True) or {}
                     }
-                    print(details)
+
                     # 记录操作日志
                     log_operation(user_account, operation, details)
                 return response

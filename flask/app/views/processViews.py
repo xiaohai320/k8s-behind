@@ -1,7 +1,7 @@
-from datetime import datetime, timedelta
-from flask import Blueprint, request, jsonify
-from ..services.processMonitorService import *  # 假设服务函数在 processMonitorService 中
+from flask import Blueprint, request
+
 from ..commonutils.R import R  # 确保 R 类已导入
+from ..services.processMonitorService import *  # 假设服务函数在 processMonitorService 中
 from ..utils.auth import token_required
 from ..utils.check_permission import permission_required
 from ..utils.operation_record import operation_record
@@ -10,8 +10,8 @@ process_monitor_bp = Blueprint('process_monitor_bp', __name__)
 
 @process_monitor_bp.route('/api/log-monitor/pageQuery', methods=['GET'])
 @token_required
-@permission_required('admin')
-@operation_record(description='获取日志监控列表')
+@permission_required('monitor')
+# @operation_record(description='获取日志监控列表')
 def get_log_monitor():
     try:
         # 获取分页参数，默认值为第一页，每页 10 条记录
@@ -51,8 +51,8 @@ def get_log_monitor():
 
 @process_monitor_bp.route('/api/log-monitor/<entry_id>', methods=['GET'])
 @token_required
-@permission_required('admin')
-@operation_record(description='获取日志监控详情')
+@permission_required('monitor')
+# @operation_record(description='获取日志监控详情')
 def get_entry_by_id_route(entry_id):
     entry = get_entry_by_id(entry_id)
     if not entry:
@@ -70,7 +70,7 @@ def create_entry_route():
 
 @process_monitor_bp.route('/read_log', methods=['POST'])
 @token_required
-@permission_required('admin')
+@permission_required('monitor')
 @operation_record(description='读取日志')
 def read_log():
     try:

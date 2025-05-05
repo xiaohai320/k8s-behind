@@ -1,6 +1,8 @@
-from ..models.diskMonitorModel import  DiskMonitor
 from sqlalchemy import desc
+
 from app import db
+from ..models.diskMonitorModel import DiskMonitor
+
 
 def save_disk_data(data):
     """
@@ -127,7 +129,6 @@ def get_disk_data(hostname='', page=1, per_page=10):
 
     # 调试：打印所有唯一主机名
     hostnames = query.with_entities(DiskMonitor.hostname).distinct().all()
-    print("Distinct hostnames:", [hostname[0] for hostname in hostnames])
 
     # 统计唯一主机名数量
     total = query.count()

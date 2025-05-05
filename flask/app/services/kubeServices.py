@@ -1,21 +1,22 @@
 
 import subprocess
-
-from datetime import datetime, timezone, timedelta
-from threading import Timer
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
 import yaml
 from apscheduler.triggers.date import DateTrigger
 from dateutil import parser
-from flask import  jsonify, current_app
-from sqlalchemy.exc import SQLAlchemyError
-from app import core_v1, apps_v1, db, scheduler
-from ..commonutils.R import R  # 假设这是你的自定义响应类
-from kubernetes import client, config as k8sconfig
+from flask import jsonify, current_app
+from kubernetes import client
 from kubernetes.client.rest import ApiException
+from sqlalchemy.exc import SQLAlchemyError
+
+from app import core_v1, apps_v1, db, scheduler
 from app.models.alertinfoModel import AlertsInfo
+from ..commonutils.R import R  # 假设这是你的自定义响应类
 from ..models.useroperationlog import UserOperationLog
-from ..models.scriptTaskModel import ScriptTask
+
+
 def list_namespaced_pods(namespace='default'):
     """列出命名空间中的 Pods"""
     return core_v1.list_namespaced_pod(namespace)
@@ -42,10 +43,14 @@ def get_deployment_details(deployment_name, namespace='default'):
 
 def list_nodes(node_name=None):
     """列出所有节点或指定节点的信息"""
-    if node_name:
-        return core_v1.read_node(node_name)
-    else:
-        return core_v1.list_node()
+    try:
+        if node_name:
+         return core_v1.read_node(node_name)
+        else:
+         return core_v1.list_node()
+    except ApiException as e:
+        print(f"Error deleting pod: {e}")
+        return False
 def list_services(namespace='default', label_selector=''):
     label_selector="app"+"="+label_selector
     """列出命名空间中的服务"""
@@ -94,7 +99,6 @@ def list_controllers(namespace='default', controller_name=None, controller_type=
             controllers['daemon_sets'] = [d.to_dict() for d in apps_v1.list_namespaced_daemon_set(namespace).items if d.metadata.name == controller_name]
         else:
             raise ValueError(f"Unsupported controller type: {controller_type}")
-
     return controllers
 def create_deployment_object(namespace, name, image):
     """创建一个 Deployment 对象"""
@@ -181,7 +185,7 @@ def update_configmap(new_rules):
         configmap.data['rules.yml'] = updated_rules
         # 应用更新
         core_v1.patch_namespaced_config_map("prometheus-kubeconfig", "monitor-sa", configmap)
-        print("ConfigMap updated successfully")
+
         reload_prometheus()
         return jsonify({"message": "ConfigMap updated successfully"}), 200
     except client.exceptions.ApiException as e:
@@ -219,7 +223,7 @@ def insert_or_update_alert(alert_data):
         existing_alert.description = alert_data['annotations'].get('description', '')
         if existing_alert.description == '':
             existing_alert.description = alert_data['labels'].get('log', '')
-            print("log:",existing_alert.description)
+
         existing_alert.severity = alert_data['labels'].get('severity', '')
         existing_alert.instance = alert_data['labels'].get('instance', '')
         existing_alert.job = alert_data['labels'].get('job', '')
@@ -355,35 +359,58 @@ def modify_alert_rule(namespace, configmap_name, alert_name, new_rule):
     except client.exceptions.ApiException as e:
         return R.error().set_message(f"Failed to update ConfigMap: {e}").to_json(), 500
 
-def get_pod_count(namespace):
-    """获取指定命名空间下的 Pod 总数"""
+def get_pod_count(podname):
+    """获取指定 podname 的 Pod 总数"""
     try:
-        response = core_v1.list_namespaced_pod(namespace=namespace, limit=0)
+        response = core_v1.list_pod_for_all_namespaces(field_selector=f"metadata.name={podname}", limit=0)
         return len(response.items) or 0
     except ApiException as e:
         raise Exception(f"Failed to get pod count: {e}")
-def list_pods(namespace, page, pageSize):
-    """列出指定命名空间下的 Pod，并返回分页信息和总数"""
+
+def get_pod_count_v1():
+    """获取指定命名空间下的 Pod 总数"""
     try:
-        # 获取总数
-        total_items = get_pod_count(namespace)
-        # 计算偏移量
-        offset = (page - 1) * pageSize
-        # 分页查询数据
-        pods = core_v1.list_namespaced_pod(
-            namespace=namespace,
-            _preload_content=False,  # 禁用自动解析内容，以便手动处理
-            pretty=True,
-            limit=total_items,
-            _request_timeout=10
-        )
+        response = core_v1.list_pod_for_all_namespaces()
+        return len(response.items) or 0
+    except ApiException as e:
+        raise Exception(f"Failed to get pod count: {e}")
+
+
+def list_pods(podname, page, pageSize):
+    """列出指定 podname 的 Pod，并返回分页信息和总数"""
+    try:
+        if podname:
+            # 获取总数
+            total_items = get_pod_count(podname)
+            print(f"Total items: {total_items}")
+            # 计算偏移量
+            offset = (page - 1) * pageSize
+            # 分页查询数据
+            pods = core_v1.list_pod_for_all_namespaces(
+                field_selector=f"metadata.name={podname}",
+                _preload_content=False,  # 禁用自动解析内容，以便手动处理
+                pretty=True,
+                limit=total_items,
+                _request_timeout=10
+            )
+        else:
+            # 获取所有 Pod 的总数
+            total_items = get_pod_count_v1()
+            print(f"Total items: {total_items}")
+            # 计算偏移量
+            offset = (page - 1) * pageSize
+            # 分页查询所有 Pod
+            pods = core_v1.list_pod_for_all_namespaces(
+                _preload_content=False,  # 禁用自动解析内容，以便手动处理
+                pretty=True,
+                limit=total_items,
+                _request_timeout=10
+            )
 
         # 解析 API 响应
         response = client.ApiClient().deserialize(pods, 'V1PodList')
         # 从响应中提取 Pod 列表
-        # print( len(response.items))
         pod_list = [pod.to_dict() for pod in response.items[offset:offset + pageSize]]
-        # print(pod_list)
         # 构建响应数据
         response_data = {
             'totalItems': total_items,

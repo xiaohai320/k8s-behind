@@ -7,8 +7,8 @@ class R:
         return R(True, 200, message, data)
 
     @staticmethod
-    def error(message="失败", data=None):
-        return R(False, 400, message, data)
+    def error(message="失败", data=None, code=400):
+        return R(False, code, message, data)
 
     @staticmethod
     def info(message="提示", data=None):
